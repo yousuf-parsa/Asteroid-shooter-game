@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="style.css">
   <script src="game.js" defer></script>
 </head>
-<body data-state="menu">
+<body data-state="menu" data-bg="portal-field">
   <main class="stage">
     <canvas id="game" aria-label="Void Shatter game field"></canvas>
     <div class="vignette" aria-hidden="true"></div>
@@ -64,6 +64,7 @@
     </div>
   </header>
 
+  <button id="bg-badge" class="bg-badge" type="button" aria-label="Cycle background field">Field: Portal · B</button>
   <button id="sound-badge" class="sound-badge" type="button" aria-pressed="false" aria-label="Toggle sound">Sound on · M</button>
 
   <!-- Touch controls: only shown on touchscreens while playing -->
@@ -117,11 +118,22 @@
         <li><span class="dot dot-saucer" aria-hidden="true"></span>Dash deflects saucer fire</li>
       </ul>
 
+      <div class="field-picker" role="radiogroup" aria-label="Background field">
+        <span class="field-label">Field</span>
+        <div class="field-pills">
+          <button class="field-pill active" type="button" role="radio" aria-checked="true" data-bg-option="portal-field">Portal</button>
+          <button class="field-pill" type="button" role="radio" aria-checked="false" data-bg-option="flow-field">Flow</button>
+          <button class="field-pill" type="button" role="radio" aria-checked="false" data-bg-option="cloud-field">Cloud</button>
+          <button class="field-pill" type="button" role="radio" aria-checked="false" data-bg-option="bell-field">Bell</button>
+          <button class="field-pill" type="button" role="radio" aria-checked="false" data-bg-option="stream-convergence">Stream</button>
+        </div>
+      </div>
+
       <p class="best-line">High score <strong id="start-high">0</strong></p>
       <div class="btn-row">
         <button id="btn-start" class="btn primary" type="button">Launch</button>
       </div>
-      <p class="hint kbd-only">or press <kbd>Enter</kbd> / <kbd class="wide">Space</kbd></p>
+      <p class="hint kbd-only">or press <kbd>Enter</kbd> / <kbd class="wide">Space</kbd> · <kbd>B</kbd> field</p>
       <p class="hint touch-only landscape-tip">Best played in landscape</p>
     </div>
   </section>
@@ -136,6 +148,16 @@
         <div class="stat"><span class="chip-label">Wave</span><span id="pause-wave" class="stat-value">1</span></div>
         <div class="stat"><span class="chip-label">Combo</span><span id="pause-combo" class="stat-value">×1</span></div>
       </div>
+      <div class="field-picker compact" role="radiogroup" aria-label="Background field">
+        <span class="field-label">Field</span>
+        <div class="field-pills">
+          <button class="field-pill active" type="button" role="radio" aria-checked="true" data-bg-option="portal-field">Portal</button>
+          <button class="field-pill" type="button" role="radio" aria-checked="false" data-bg-option="flow-field">Flow</button>
+          <button class="field-pill" type="button" role="radio" aria-checked="false" data-bg-option="cloud-field">Cloud</button>
+          <button class="field-pill" type="button" role="radio" aria-checked="false" data-bg-option="bell-field">Bell</button>
+          <button class="field-pill" type="button" role="radio" aria-checked="false" data-bg-option="stream-convergence">Stream</button>
+        </div>
+      </div>
       <div class="btn-row">
         <button id="btn-resume" class="btn primary" type="button">Resume</button>
         <button id="btn-restart" class="btn" type="button">Restart</button>
@@ -144,7 +166,7 @@
         <button id="btn-sound" class="btn ghost" type="button">Sound: On</button>
         <button id="btn-pause-menu" class="btn ghost" type="button">Main menu</button>
       </div>
-      <p class="hint kbd-only"><kbd>P</kbd> / <kbd>Esc</kbd> resume · <kbd>R</kbd> restart · <kbd>M</kbd> mute</p>
+      <p class="hint kbd-only"><kbd>P</kbd> / <kbd>Esc</kbd> resume · <kbd>R</kbd> restart · <kbd>M</kbd> mute · <kbd>B</kbd> field</p>
     </div>
   </section>
 

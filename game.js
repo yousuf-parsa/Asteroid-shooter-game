@@ -61,7 +61,23 @@
   const STORAGE_KEYS = Object.freeze({
     high: 'voidShatter.highScore',
     mute: 'voidShatter.muted',
+    bg: 'voidShatter.bgVariant',
   });
+
+  const BG_VARIANTS = Object.freeze([
+    Object.freeze({ id: 'portal-field', label: 'Portal Field', short: 'Portal', bg: '#030512' }),
+    Object.freeze({ id: 'flow-field', label: 'Flow Field', short: 'Flow', bg: '#020b12' }),
+    Object.freeze({ id: 'cloud-field', label: 'Cloud Field', short: 'Cloud', bg: '#070414' }),
+    Object.freeze({ id: 'bell-field', label: 'Bell Field', short: 'Bell', bg: '#030714' }),
+    Object.freeze({ id: 'stream-convergence', label: 'Stream Convergence', short: 'Stream', bg: '#090311' }),
+  ]);
+
+  const BG_VARIANT_MAP = Object.freeze(
+    Object.assign(
+      Object.create(null),
+      Object.fromEntries(BG_VARIANTS.map((v) => [v.id, v])),
+    ),
+  );
 
   const MAX_SAFE_SCORE = 999_999_999;
 
@@ -91,6 +107,10 @@
       if (typeof raw !== 'string' || !/^\d{1,9}$/.test(raw)) return 0;
       const parsed = Number(raw);
       return Number.isSafeInteger(parsed) && parsed >= 0 ? Math.min(parsed, MAX_SAFE_SCORE) : 0;
+    },
+    readBgVariant(key) {
+      const raw = this.get(key, 'portal-field');
+      return typeof raw === 'string' && BG_VARIANT_MAP[raw] ? raw : 'portal-field';
     },
   });
 
@@ -641,7 +661,7 @@
   const GAME_KEYS = new Set([
     'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space',
     'KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'ShiftRight',
-    'KeyP', 'Escape', 'KeyM', 'Enter', 'NumpadEnter', 'KeyR',
+    'KeyP', 'Escape', 'KeyM', 'KeyB', 'Enter', 'NumpadEnter', 'KeyR',
   ]);
   const DASH_KEYS = new Set(['ShiftLeft', 'ShiftRight', 'ArrowDown', 'KeyS']);
   const CONFIRM_KEYS = new Set(['Enter', 'NumpadEnter', 'Space']);
@@ -823,27 +843,143 @@
     }
   }
 
-  // ───────────────────────── Starfield ─────────────────────────
+  // ───────────────────────── PortalFieldCollection Backdrop ─────────────────────────
 
   const STAR_PALETTE = Object.freeze([
     '#9fb8ff', '#d2e2ff', '#ffffff', '#ffe8cc', '#c9b8ff', '#a8f6ff',
   ]);
 
+  const FLOW_COLORS = Object.freeze(['#4dffb8', '#54b8ff', '#8c73ff', '#5ff6ff']);
+  const PORTAL_COLORS = Object.freeze(['#5ff6ff', '#8d73ff', '#ff6fd8', '#68b8ff']);
+  const STREAM_COLORS = Object.freeze(['#ff6fd8', '#5ff6ff', '#a98bff', '#ffd76a']);
+
   class Starfield {
+    #variant = 'portal-field';
+    #prevVariant = null;
+    #transition = 1;
+    #offsetX = 0;
+    #offsetY = 0;
+    #glowSprites = Object.create(null);
+    #portalOrbits = [];
+    #flowParticles = [];
+    #cloudPuffs = [];
+    #cloudMotes = [];
+    #streams = [];
+
     layers = [
-      { count: 145, parallax: 0.032, drift: 4, size: [0.6, 1.15], alpha: [0.22, 0.55] },
-      { count: 78, parallax: 0.095, drift: 9, size: [0.95, 1.65], alpha: [0.36, 0.78] },
-      { count: 32, parallax: 0.21, drift: 16, size: [1.45, 2.45], alpha: [0.58, 0.96] },
+      { count: 120, parallax: 0.03, drift: 3.5, size: [0.6, 1.1], alpha: [0.18, 0.46] },
+      { count: 64, parallax: 0.09, drift: 8, size: [0.95, 1.55], alpha: [0.3, 0.68] },
+      { count: 26, parallax: 0.2, drift: 14, size: [1.35, 2.25], alpha: [0.5, 0.88] },
     ];
     stars = [];
-    nebula = null;
     width = 1;
     height = 1;
 
-    resize(width, height, rebuildNebula = true) {
+    constructor(initialVariant = 'portal-field') {
+      this.#variant = BG_VARIANT_MAP[initialVariant] ? initialVariant : 'portal-field';
+      this.#initGlowSprites();
+      this.#initStaticFieldData();
+    }
+
+    get variant() {
+      return this.#variant;
+    }
+
+    get baseColor() {
+      return BG_VARIANT_MAP[this.#variant]?.bg ?? '#030512';
+    }
+
+    setVariant(nextId) {
+      if (!BG_VARIANT_MAP[nextId] || nextId === this.#variant) return false;
+      this.#prevVariant = this.#variant;
+      this.#variant = nextId;
+      this.#transition = MotionPref.reduced ? 1 : 0;
+      return true;
+    }
+
+    stepTransition(dt) {
+      if (this.#transition < 1) {
+        this.#transition = Math.min(1, this.#transition + dt * 2.7);
+        if (this.#transition >= 1) this.#prevVariant = null;
+      }
+    }
+
+    #makeGlowSprite(innerRgba, midRgba) {
+      const size = 128;
+      const c = document.createElement('canvas');
+      c.width = size;
+      c.height = size;
+      const g = c.getContext('2d');
+      if (!g) return null;
+      const half = size * 0.5;
+      const grad = g.createRadialGradient(half, half, 0, half, half, half);
+      grad.addColorStop(0, innerRgba);
+      grad.addColorStop(0.45, midRgba);
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, size, size);
+      return c;
+    }
+
+    #initGlowSprites() {
+      const specs = {
+        cyan: ['rgba(95, 246, 255, 0.42)', 'rgba(32, 162, 235, 0.14)'],
+        violet: ['rgba(156, 118, 255, 0.42)', 'rgba(84, 48, 210, 0.14)'],
+        magenta: ['rgba(255, 102, 212, 0.38)', 'rgba(182, 38, 152, 0.12)'],
+        emerald: ['rgba(72, 248, 190, 0.36)', 'rgba(16, 158, 168, 0.12)'],
+        sapphire: ['rgba(96, 174, 255, 0.38)', 'rgba(36, 86, 216, 0.13)'],
+        gold: ['rgba(255, 214, 106, 0.32)', 'rgba(220, 128, 48, 0.1)'],
+      };
+      for (const [key, [inner, mid]] of Object.entries(specs)) {
+        this.#glowSprites[key] = this.#makeGlowSprite(inner, mid);
+      }
+    }
+
+    #initStaticFieldData() {
+      // Portal-field orbital vortex filaments
+      this.#portalOrbits = Array.from({ length: 92 }, (_, i) => ({
+        angle: rand(0, TAU),
+        normR: rand(0.14, 1.08),
+        speed: rand(0.16, 0.52) * (i % 5 === 0 ? -0.65 : 1),
+        tilt: rand(0.62, 0.86),
+        arc: rand(0.1, 0.34),
+        width: rand(0.8, 2.0),
+        alpha: rand(0.14, 0.42),
+        color: PORTAL_COLORS[i % PORTAL_COLORS.length],
+      }));
+
+      // Cloud-field volumetric strata puffs
+      const cloudKeys = ['violet', 'sapphire', 'magenta', 'cyan', 'violet', 'emerald'];
+      this.#cloudPuffs = Array.from({ length: 14 }, (_, i) => ({
+        nx: rand(-0.1, 1.1),
+        ny: rand(-0.1, 1.1),
+        radiusScale: rand(0.28, 0.58),
+        driftX: rand(0.005, 0.014) * (i % 2 === 0 ? 1 : -1),
+        driftY: rand(0.003, 0.009) * (i % 3 === 0 ? -1 : 1),
+        depth: 0.25 + (i % 3) * 0.25,
+        phase: rand(0, TAU),
+        alpha: rand(0.22, 0.46),
+        sprite: cloudKeys[i % cloudKeys.length],
+      }));
+
+      // Stream-convergence fiber currents
+      this.#streams = Array.from({ length: 26 }, (_, i) => ({
+        edge: i % 4,
+        pos: ((i + 0.5) / 26 + rand(-0.02, 0.02) + 1) % 1,
+        target: i % 2,
+        bend: rand(-0.26, 0.26),
+        pulsePhase: rand(0, 1),
+        pulseSpeed: rand(0.14, 0.32),
+        alpha: rand(0.12, 0.28),
+        color: STREAM_COLORS[i % STREAM_COLORS.length],
+      }));
+    }
+
+    resize(width, height) {
       this.width = width;
       this.height = height;
-      const density = clamp((width * height) / (1280 * 720), 0.45, 2.2);
+      const density = clamp((width * height) / (1280 * 720), 0.45, 2.0);
+
       this.stars = this.layers.map((layer, li) => {
         const count = Math.round(layer.count * density);
         const list = new Array(count);
@@ -861,44 +997,54 @@
         }
         return list;
       });
-      if (rebuildNebula || !this.nebula) {
-        this.buildNebula(width, height);
+
+      const flowCount = Math.round(112 * clamp(density, 0.6, 1.45));
+      this.#flowParticles = Array.from({ length: flowCount }, (_, i) => ({
+        x: rand(0, width),
+        y: rand(0, height),
+        px: 0,
+        py: 0,
+        speed: rand(34, 88),
+        life: rand(0.4, 3.6),
+        maxLife: 3.6,
+        width: rand(1.0, 2.1),
+        color: FLOW_COLORS[i % FLOW_COLORS.length],
+      }));
+      for (const p of this.#flowParticles) {
+        p.px = p.x;
+        p.py = p.y;
       }
+
+      const moteCount = Math.round(62 * clamp(density, 0.6, 1.5));
+      this.#cloudMotes = Array.from({ length: moteCount }, () => ({
+        x: rand(0, width),
+        y: rand(0, height),
+        r: rand(1.1, 2.8),
+        vx: rand(-10, 14),
+        vy: rand(-8, 8),
+        phase: rand(0, TAU),
+        alpha: rand(0.14, 0.42),
+        color: pick(['#d5c2ff', '#a8f6ff', '#ffb8ec', '#ffffff']),
+      }));
     }
 
-    buildNebula(width, height) {
-      const scale = 0.45;
-      const canvas = this.nebula ?? document.createElement('canvas');
-      canvas.width = Math.max(1, Math.ceil(width * scale));
-      canvas.height = Math.max(1, Math.ceil(height * scale));
-      const g = canvas.getContext('2d');
-      if (!g) return;
-      g.clearRect(0, 0, canvas.width, canvas.height);
-
-      const blobs = [
-        'rgba(92, 58, 224, 0.19)',
-        'rgba(18, 152, 220, 0.13)',
-        'rgba(218, 48, 168, 0.1)',
-        'rgba(32, 92, 225, 0.12)',
-        'rgba(24, 210, 170, 0.065)',
-      ];
-      const big = Math.max(canvas.width, canvas.height);
-      for (const color of blobs) {
-        const x = rand(0, canvas.width);
-        const y = rand(0, canvas.height);
-        const r = rand(0.32, 0.72) * big;
-        const grad = g.createRadialGradient(x, y, 0, x, y, r);
-        grad.addColorStop(0, color);
-        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        g.fillStyle = grad;
-        g.fillRect(0, 0, canvas.width, canvas.height);
-      }
-      this.nebula = canvas;
+    buildNebula() {
+      // Offscreen glow sprites are resolution-independent and cached once; nothing to rebuild on resize.
     }
 
-    update(dt, vx, vy) {
+    update(dt, vx, vy, time) {
       const w = this.width;
       const h = this.height;
+      this.stepTransition(dt);
+
+      // Gentle camera parallax spring offset driven by ship velocity
+      const targetOx = clamp(-vx * 0.08, -42, 42);
+      const targetOy = clamp(-vy * 0.08, -42, 42);
+      const ease = 1 - Math.exp(-dt * 3.5);
+      this.#offsetX += (targetOx - this.#offsetX) * ease;
+      this.#offsetY += (targetOy - this.#offsetY) * ease;
+
+      // Update parallax star layers
       for (let li = 0; li < this.layers.length; li++) {
         const layer = this.layers[li];
         const dx = (-vx * layer.parallax - layer.drift) * dt;
@@ -914,12 +1060,391 @@
           else if (s.y >= h) s.y -= h;
         }
       }
+
+      if (MotionPref.reduced) return;
+
+      const active = this.#variant;
+      const prev = this.#prevVariant;
+
+      // Update portal-field orbits when active or fading
+      if (active === 'portal-field' || prev === 'portal-field') {
+        for (const o of this.#portalOrbits) {
+          o.angle = (o.angle + o.speed * dt) % TAU;
+          o.normR -= dt * 0.045;
+          if (o.normR < 0.1) o.normR = 1.08;
+        }
+      }
+
+      // Update flow-field filaments
+      if (active === 'flow-field' || prev === 'flow-field') {
+        const t = time * 0.28;
+        const invW = 4.6 / Math.max(320, w);
+        const invH = 4.6 / Math.max(240, h);
+        for (const p of this.#flowParticles) {
+          p.px = p.x;
+          p.py = p.y;
+          const ang = Math.sin(p.x * invW + t) * Math.cos(p.y * invH - t * 0.85) * 2.5
+            + Math.cos((p.x + p.y) * invW * 0.45 + t * 0.6) * 0.9;
+          p.x += (Math.cos(ang) * p.speed - vx * 0.05) * dt;
+          p.y += (Math.sin(ang) * p.speed - vy * 0.05) * dt;
+          p.life -= dt;
+          if (p.life <= 0 || p.x < -12 || p.x > w + 12 || p.y < -12 || p.y > h + 12) {
+            p.x = rand(0, w);
+            p.y = rand(0, h);
+            p.px = p.x;
+            p.py = p.y;
+            p.life = rand(1.6, p.maxLife);
+          }
+        }
+      }
+
+      // Update cloud-field puffs & motes
+      if (active === 'cloud-field' || prev === 'cloud-field') {
+        for (const c of this.#cloudPuffs) {
+          c.nx += c.driftX * dt;
+          c.ny += c.driftY * dt;
+          if (c.nx < -0.25) c.nx = 1.25;
+          else if (c.nx > 1.25) c.nx = -0.25;
+          if (c.ny < -0.25) c.ny = 1.25;
+          else if (c.ny > 1.25) c.ny = -0.25;
+        }
+        for (const m of this.#cloudMotes) {
+          m.x = wrapCoord(m.x + (m.vx - vx * 0.04) * dt, w);
+          m.y = wrapCoord(m.y + (m.vy - vy * 0.04) * dt, h);
+        }
+      }
+
+      // Update stream-convergence light pulses
+      if (active === 'stream-convergence' || prev === 'stream-convergence') {
+        for (const st of this.#streams) {
+          st.pulsePhase = (st.pulsePhase + st.pulseSpeed * dt) % 1;
+        }
+      }
+    }
+
+    #drawAura(ctx, spriteKey, x, y, radius, alpha) {
+      const sprite = this.#glowSprites[spriteKey];
+      if (!sprite || alpha <= 0.002) return;
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(sprite, x - radius, y - radius, radius * 2, radius * 2);
+    }
+
+    #drawPortalField(ctx, time, warpFactor, layerAlpha) {
+      const w = this.width;
+      const h = this.height;
+      const t = MotionPref.reduced ? 0 : time;
+      const minDim = Math.min(w, h);
+      const cx = w * 0.5 + this.#offsetX * 0.65 + Math.sin(t * 0.24) * minDim * 0.03;
+      const cy = h * 0.5 + this.#offsetY * 0.65 + Math.cos(t * 0.19) * minDim * 0.025;
+      const baseR = minDim * (0.46 + warpFactor * 0.06);
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+
+      // Soft portal halo & core aura
+      this.#drawAura(ctx, 'violet', cx, cy, baseR * 1.15, 0.52 * layerAlpha);
+      this.#drawAura(ctx, 'cyan', cx, cy, baseR * 0.68, 0.44 * layerAlpha);
+      this.#drawAura(ctx, 'magenta', cx + Math.cos(t * 0.3) * baseR * 0.2, cy + Math.sin(t * 0.25) * baseR * 0.15, baseR * 0.52, 0.26 * layerAlpha);
+
+      // Concentric breathing perspective portal rings
+      const ringCount = 8;
+      for (let i = 0; i < ringCount; i++) {
+        const phase = ((i / ringCount) + t * 0.085) % 1;
+        const r = baseR * (0.16 + phase * 1.05);
+        const fade = Math.sin(phase * Math.PI);
+        const tilt = 0.68 + 0.14 * Math.sin(t * 0.35 + i * 0.7);
+        const rot = t * (i % 2 === 0 ? 0.14 : -0.11) + i * 0.5;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(rot);
+        ctx.scale(1, tilt);
+        ctx.strokeStyle = PORTAL_COLORS[i % PORTAL_COLORS.length];
+        ctx.lineWidth = 1.1 + (1 - phase) * 1.2;
+        ctx.globalAlpha = fade * (0.24 + warpFactor * 0.12) * layerAlpha;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, TAU);
+        ctx.stroke();
+
+        // Segmented glowing highlight arc along the portal ring
+        ctx.lineWidth = 2.0;
+        ctx.globalAlpha = fade * 0.38 * layerAlpha;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, phase * TAU, phase * TAU + 0.85);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Swirling vortex filaments
+      ctx.lineCap = 'round';
+      for (const o of this.#portalOrbits) {
+        const r = baseR * o.normR;
+        const fade = Math.sin(clamp((o.normR - 0.1) / 0.98, 0, 1) * Math.PI);
+        const x1 = cx + Math.cos(o.angle) * r;
+        const y1 = cy + Math.sin(o.angle) * r * o.tilt;
+        const endAng = o.angle - o.arc * (1 + warpFactor * 1.4);
+        const x2 = cx + Math.cos(endAng) * r * 1.03;
+        const y2 = cy + Math.sin(endAng) * r * o.tilt * 1.03;
+
+        ctx.strokeStyle = o.color;
+        ctx.lineWidth = o.width;
+        ctx.globalAlpha = o.alpha * fade * layerAlpha;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    #drawFlowField(ctx, time, warpFactor, layerAlpha) {
+      const w = this.width;
+      const h = this.height;
+      const t = MotionPref.reduced ? 0 : time;
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+
+      // Ambient teal/indigo deep-current glow pools
+      this.#drawAura(ctx, 'emerald', w * 0.25 + this.#offsetX * 0.5, h * 0.36 + this.#offsetY * 0.5, Math.max(w, h) * 0.45, 0.38 * layerAlpha);
+      this.#drawAura(ctx, 'sapphire', w * 0.76 + this.#offsetX * 0.5, h * 0.66 + this.#offsetY * 0.5, Math.max(w, h) * 0.48, 0.4 * layerAlpha);
+
+      // Sweeping harmonic field guide ribbons
+      const ribbonCount = 7;
+      const stepX = Math.max(28, w / 28);
+      for (let r = 0; r < ribbonCount; r++) {
+        const baseY = ((r + 0.5) / ribbonCount) * h + this.#offsetY * 0.3;
+        ctx.strokeStyle = FLOW_COLORS[r % FLOW_COLORS.length];
+        ctx.lineWidth = 1.25;
+        ctx.globalAlpha = (0.12 + 0.04 * Math.sin(t + r)) * layerAlpha;
+        ctx.beginPath();
+        for (let x = -20; x <= w + 20; x += stepX) {
+          const nx = x / Math.max(320, w);
+          const wave = Math.sin(nx * 5.2 + t * 0.55 + r * 0.9) * 34
+            + Math.cos(nx * 2.6 - t * 0.35 + r * 1.3) * 22;
+          const y = baseY + wave;
+          if (x === -20) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+
+      // Luminous curl-flow filaments
+      const tailMul = 5.5 + warpFactor * 6;
+      for (const p of this.#flowParticles) {
+        const dx = p.x - p.px;
+        const dy = p.y - p.py;
+        const lifeFade = Math.sin(clamp(p.life / p.maxLife, 0, 1) * Math.PI);
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = p.width;
+        ctx.globalAlpha = lifeFade * 0.44 * layerAlpha;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x - dx * tailMul, p.y - dy * tailMul);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    #drawCloudField(ctx, time, warpFactor, layerAlpha) {
+      const w = this.width;
+      const h = this.height;
+      const t = MotionPref.reduced ? 0 : time;
+      const big = Math.max(w, h);
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+
+      // Multi-depth drifting cosmic cloud strata
+      for (const c of this.#cloudPuffs) {
+        const breathe = 1 + 0.08 * Math.sin(t * 0.42 + c.phase) + warpFactor * 0.05;
+        const x = c.nx * w + this.#offsetX * c.depth;
+        const y = c.ny * h + this.#offsetY * c.depth;
+        const r = c.radiusScale * big * breathe;
+        this.#drawAura(ctx, c.sprite, x, y, r, c.alpha * layerAlpha);
+      }
+
+      // Drifting iridescent dust motes
+      for (const m of this.#cloudMotes) {
+        const tw = 0.55 + 0.45 * Math.sin(t * 1.4 + m.phase);
+        ctx.fillStyle = m.color;
+        ctx.globalAlpha = m.alpha * tw * layerAlpha;
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, m.r, 0, TAU);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    #drawBellField(ctx, time, warpFactor, layerAlpha) {
+      const w = this.width;
+      const h = this.height;
+      const t = MotionPref.reduced ? 0 : time;
+
+      // Three slowly orbiting 2D Gaussian bell attractors
+      const peaks = [
+        { x: 0.3 + 0.14 * Math.sin(t * 0.32), y: 0.44 + 0.12 * Math.cos(t * 0.27), amp: 86 + warpFactor * 26, sx: 0.032, sy: 0.045 },
+        { x: 0.68 + 0.13 * Math.cos(t * 0.25), y: 0.56 + 0.11 * Math.sin(t * 0.31), amp: 76 + warpFactor * 20, sx: 0.038, sy: 0.05 },
+        { x: 0.5 + 0.18 * Math.sin(t * 0.21 + 2.1), y: 0.34 + 0.14 * Math.cos(t * 0.19 + 1.2), amp: 58, sx: 0.028, sy: 0.04 },
+      ];
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      this.#drawAura(ctx, 'sapphire', peaks[0].x * w, peaks[0].y * h, Math.min(w, h) * 0.55, 0.34 * layerAlpha);
+      this.#drawAura(ctx, 'violet', peaks[1].x * w, peaks[1].y * h, Math.min(w, h) * 0.5, 0.32 * layerAlpha);
+      ctx.restore();
+
+      const rows = 13;
+      const cols = 42;
+      const stepX = (w + 40) / cols;
+
+      ctx.save();
+      for (let row = 0; row < rows; row++) {
+        const ny = 0.14 + (row / (rows - 1)) * 0.78;
+        const baseY = ny * h + this.#offsetY * (0.2 + ny * 0.4);
+        const depthFade = 0.32 + 0.68 * (row / (rows - 1));
+
+        ctx.beginPath();
+        for (let col = 0; col <= cols; col++) {
+          const x = -20 + col * stepX;
+          const nx = (x - this.#offsetX * 0.35) / Math.max(320, w);
+          let lift = 0;
+          for (let p = 0; p < peaks.length; p++) {
+            const pk = peaks[p];
+            const dx = nx - pk.x;
+            const dy = ny - pk.y;
+            lift += pk.amp * Math.exp(-(dx * dx) / pk.sx - (dy * dy) / pk.sy);
+          }
+          const y = baseY - lift * (0.55 + 0.45 * depthFade);
+          if (col === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+
+        // Subtle dark veil under each ridge for crisp 3D depth separation
+        ctx.save();
+        ctx.lineTo(w + 20, baseY + 34);
+        ctx.lineTo(-20, baseY + 34);
+        ctx.closePath();
+        ctx.globalAlpha = 0.24 * layerAlpha;
+        ctx.fillStyle = '#030714';
+        ctx.fill();
+        ctx.restore();
+
+        // Luminous Gaussian contour crest
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = row % 3 === 0 ? '#5ff6ff' : row % 3 === 1 ? '#79b4ff' : '#a98bff';
+        ctx.lineWidth = 1.05 + depthFade * 0.7;
+        ctx.globalAlpha = (0.14 + 0.22 * depthFade) * layerAlpha;
+        ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+      }
+      ctx.restore();
+    }
+
+    #drawStreamConvergence(ctx, time, warpFactor, layerAlpha) {
+      const w = this.width;
+      const h = this.height;
+      const t = MotionPref.reduced ? 0 : time;
+      const minDim = Math.min(w, h);
+
+      // Two gracefully orbiting harmonic focal attractors
+      const nodes = [
+        {
+          x: w * 0.38 + Math.cos(t * 0.36) * minDim * 0.12 + this.#offsetX * 0.55,
+          y: h * 0.48 + Math.sin(t * 0.42) * minDim * 0.1 + this.#offsetY * 0.55,
+        },
+        {
+          x: w * 0.64 + Math.cos(t * 0.31 + Math.PI) * minDim * 0.12 + this.#offsetX * 0.55,
+          y: h * 0.52 + Math.sin(t * 0.37 + Math.PI) * minDim * 0.1 + this.#offsetY * 0.55,
+        },
+      ];
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+
+      // Focal convergence halos
+      this.#drawAura(ctx, 'magenta', nodes[0].x, nodes[0].y, minDim * (0.36 + warpFactor * 0.08), 0.42 * layerAlpha);
+      this.#drawAura(ctx, 'cyan', nodes[1].x, nodes[1].y, minDim * (0.36 + warpFactor * 0.08), 0.42 * layerAlpha);
+      this.#drawAura(ctx, 'gold', (nodes[0].x + nodes[1].x) * 0.5, (nodes[0].y + nodes[1].y) * 0.5, minDim * 0.24, 0.2 * layerAlpha);
+
+      // Converging perimeter streams + traveling light pulses
+      for (const st of this.#streams) {
+        let sx = 0;
+        let sy = 0;
+        if (st.edge === 0) { sx = -20; sy = st.pos * h; }
+        else if (st.edge === 1) { sx = w + 20; sy = st.pos * h; }
+        else if (st.edge === 2) { sx = st.pos * w; sy = -20; }
+        else { sx = st.pos * w; sy = h + 20; }
+
+        const dst = nodes[st.target];
+        const midX = (sx + dst.x) * 0.5;
+        const midY = (sy + dst.y) * 0.5;
+        const dx = dst.x - sx;
+        const dy = dst.y - sy;
+        const sway = st.bend + 0.07 * Math.sin(t * 0.7 + st.pos * TAU);
+        const cpx = midX - dy * sway;
+        const cpy = midY + dx * sway;
+
+        ctx.strokeStyle = st.color;
+        ctx.lineWidth = 1.15;
+        ctx.globalAlpha = st.alpha * layerAlpha;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.quadraticCurveTo(cpx, cpy, dst.x, dst.y);
+        ctx.stroke();
+
+        // Traveling luminous packet along the quadratic curve
+        const u = st.pulsePhase;
+        const inv = 1 - u;
+        const px = inv * inv * sx + 2 * inv * u * cpx + u * u * dst.x;
+        const py = inv * inv * sy + 2 * inv * u * cpy + u * u * dst.y;
+        const uPrev = Math.max(0, u - (0.045 + warpFactor * 0.04));
+        const invP = 1 - uPrev;
+        const px0 = invP * invP * sx + 2 * invP * uPrev * cpx + uPrev * uPrev * dst.x;
+        const py0 = invP * invP * sy + 2 * invP * uPrev * cpy + uPrev * uPrev * dst.y;
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.8;
+        ctx.globalAlpha = Math.sin(u * Math.PI) * 0.52 * layerAlpha;
+        ctx.beginPath();
+        ctx.moveTo(px0, py0);
+        ctx.lineTo(px, py);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    #drawVariant(ctx, variantId, time, warpFactor, alpha) {
+      if (alpha <= 0.004) return;
+      switch (variantId) {
+        case 'flow-field':
+          this.#drawFlowField(ctx, time, warpFactor, alpha);
+          break;
+        case 'cloud-field':
+          this.#drawCloudField(ctx, time, warpFactor, alpha);
+          break;
+        case 'bell-field':
+          this.#drawBellField(ctx, time, warpFactor, alpha);
+          break;
+        case 'stream-convergence':
+          this.#drawStreamConvergence(ctx, time, warpFactor, alpha);
+          break;
+        case 'portal-field':
+        default:
+          this.#drawPortalField(ctx, time, warpFactor, alpha);
+          break;
+      }
     }
 
     draw(ctx, time, warpVx, warpVy, warpFactor) {
-      if (this.nebula) ctx.drawImage(this.nebula, 0, 0, this.width, this.height);
-      const streak = warpFactor > 0.02 && !MotionPref.reduced;
+      // Crossfade between previous & active PortalFieldCollection variant
+      if (this.#prevVariant && this.#transition < 1) {
+        this.#drawVariant(ctx, this.#prevVariant, time, warpFactor, 1 - this.#transition);
+      }
+      this.#drawVariant(ctx, this.#variant, time, warpFactor, this.#transition);
 
+      // Subtle parallax starfield integrated over the generative backdrop
+      const streak = warpFactor > 0.02 && !MotionPref.reduced;
       for (let li = 0; li < this.layers.length; li++) {
         const list = this.stars[li];
         const parallax = this.layers[li].parallax;
@@ -1290,6 +1815,7 @@
         dash: byId('hud-dash'),
         dashMeter: byId('hud-dash-meter'),
         dashText: byId('hud-dash-text'),
+        bgBadge: byId('bg-badge'),
         soundBadge: byId('sound-badge'),
         banner: byId('banner'),
         bannerTitle: byId('banner-title'),
@@ -1322,8 +1848,9 @@
       this.touchControls = new TouchControls(this, this.input);
       this.pixelRatioCap = TouchControls.prefersTouch() ? CFG.touchPixelRatioCap : 2;
       this.audio = new SoundEngine(Store.get(STORAGE_KEYS.mute, '0') === '1');
-      this.stars = new Starfield();
+      this.stars = new Starfield(Store.readBgVariant(STORAGE_KEYS.bg));
       this.particles = new ParticleSystem(CFG.maxParticles);
+      this.bgPills = Array.from(document.querySelectorAll('[data-bg-option]'));
 
       this.asteroids = [];
       this.bullets = [];
@@ -1386,6 +1913,7 @@
       this.bindEvents();
       this.watchDpr();
       this.updateSoundUi();
+      this.updateBgUi();
       this.ui.startHigh.textContent = this.savedHigh.toLocaleString();
       this.spawnAttract();
       this.setState(STATE.MENU);
@@ -1463,9 +1991,17 @@
       onClick(this.ui.btnRestart, () => this.startGame());
       onClick(this.ui.btnSound, () => this.toggleMute());
       onClick(this.ui.soundBadge, () => this.toggleMute());
+      onClick(this.ui.bgBadge, () => this.cycleBackground());
       onClick(this.ui.btnPauseMenu, () => this.goToMenu());
       onClick(this.ui.btnAgain, () => this.startGame());
       onClick(this.ui.btnOverMenu, () => this.goToMenu());
+
+      for (const pill of this.bgPills) {
+        onClick(pill, () => {
+          const variantId = pill.dataset.bgOption;
+          if (variantId) this.setBackground(variantId, true);
+        });
+      }
     }
 
     watchDpr() {
@@ -1485,6 +2021,10 @@
     onKeyPress(code) {
       if (code === 'KeyM') {
         this.toggleMute();
+        return;
+      }
+      if (code === 'KeyB') {
+        this.cycleBackground();
         return;
       }
       switch (this.state) {
@@ -1689,6 +2229,35 @@
       this.ui.soundBadge.classList.toggle('muted', muted);
       this.ui.soundBadge.setAttribute('aria-pressed', muted ? 'true' : 'false');
       this.ui.btnSound.textContent = muted ? 'Sound: Off' : 'Sound: On';
+    }
+
+    setBackground(variantId, announce = false) {
+      if (!BG_VARIANT_MAP[variantId]) return;
+      const changed = this.stars.setVariant(variantId);
+      Store.set(STORAGE_KEYS.bg, variantId);
+      this.updateBgUi();
+      if (changed && announce) {
+        this.showToast(`Field · ${BG_VARIANT_MAP[variantId].label}`);
+        this.audio.uiBlip();
+      }
+    }
+
+    cycleBackground() {
+      const idx = BG_VARIANTS.findIndex((v) => v.id === this.stars.variant);
+      const next = BG_VARIANTS[(idx + 1) % BG_VARIANTS.length];
+      this.setBackground(next.id, true);
+    }
+
+    updateBgUi() {
+      const id = this.stars.variant;
+      const meta = BG_VARIANT_MAP[id] ?? BG_VARIANTS[0];
+      document.body.dataset.bg = meta.id;
+      this.ui.bgBadge.textContent = `Field: ${meta.short} · B`;
+      for (const pill of this.bgPills) {
+        const active = pill.dataset.bgOption === meta.id;
+        pill.classList.toggle('active', active);
+        pill.setAttribute('aria-checked', active ? 'true' : 'false');
+      }
     }
 
     showBanner(title, sub, duration) {
@@ -2460,7 +3029,10 @@
 
     update(dt) {
       this.stateTime += dt;
-      if (this.state === STATE.PAUSED) return;
+      if (this.state === STATE.PAUSED) {
+        this.stars.stepTransition(dt);
+        return;
+      }
 
       if (this.hitStop > 0) {
         this.hitStop = Math.max(0, this.hitStop - dt);
@@ -2474,7 +3046,7 @@
       const menu = this.state === STATE.MENU;
       const shipLive = (playing || menu) && s?.alive;
 
-      this.stars.update(dt, shipLive ? s.vx : 0, shipLive ? s.vy : 0);
+      this.stars.update(dt, shipLive ? s.vx : 0, shipLive ? s.vy : 0, this.time);
       this.updateAsteroids(dt);
 
       if (playing) {
@@ -3114,7 +3686,7 @@
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
 
-      ctx.fillStyle = '#02030b';
+      ctx.fillStyle = this.stars.baseColor;
       ctx.fillRect(0, 0, this.width, this.height);
 
       const s = this.ship;

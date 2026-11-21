@@ -1,9 +1,15 @@
 :root {
-  --bg: #02030b;
-  --glass: rgb(14 20 46 / 0.46);
-  --glass-strong: rgb(10 15 38 / 0.68);
-  --glass-border: rgb(140 200 255 / 0.2);
-  --glass-highlight: rgb(255 255 255 / 0.1);
+  --bg: #030512;
+  --glass: rgb(14 20 48 / 0.48);
+  --glass-strong: rgb(10 15 40 / 0.68);
+  --glass-border: rgb(126 196 255 / 0.22);
+  --glass-highlight: rgb(255 255 255 / 0.11);
+  --field-glow-a: rgb(95 246 255 / 0.78);
+  --field-glow-b: rgb(169 139 255 / 0.68);
+  --field-aura: rgb(95 246 255 / 0.1);
+  --overlay-inner: rgb(14 20 52 / 0.24);
+  --overlay-outer: rgb(2 4 14 / 0.72);
+  --vignette-edge: rgb(2 3 14 / 0.56);
   --text: #eaf3ff;
   --muted: #8ea3c7;
   --cyan: #5ff6ff;
@@ -16,6 +22,73 @@
   --font-ui: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", Menlo, monospace;
   --ease-out: cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+/* PortalFieldCollection synchronized UI themes */
+
+body[data-bg="portal-field"] {
+  --bg: #030512;
+  --glass: rgb(14 20 50 / 0.48);
+  --glass-strong: rgb(10 15 42 / 0.68);
+  --glass-border: rgb(116 206 255 / 0.24);
+  --field-glow-a: rgb(95 246 255 / 0.8);
+  --field-glow-b: rgb(169 139 255 / 0.7);
+  --field-aura: rgb(95 246 255 / 0.11);
+  --overlay-inner: rgb(14 20 56 / 0.24);
+  --overlay-outer: rgb(2 4 15 / 0.72);
+  --vignette-edge: rgb(3 5 18 / 0.56);
+}
+
+body[data-bg="flow-field"] {
+  --bg: #020b12;
+  --glass: rgb(10 30 44 / 0.48);
+  --glass-strong: rgb(7 22 36 / 0.68);
+  --glass-border: rgb(77 255 210 / 0.24);
+  --field-glow-a: rgb(77 255 184 / 0.8);
+  --field-glow-b: rgb(84 166 255 / 0.7);
+  --field-aura: rgb(77 255 184 / 0.1);
+  --overlay-inner: rgb(8 32 46 / 0.24);
+  --overlay-outer: rgb(2 10 16 / 0.74);
+  --vignette-edge: rgb(1 10 16 / 0.58);
+}
+
+body[data-bg="cloud-field"] {
+  --bg: #070414;
+  --glass: rgb(26 16 54 / 0.48);
+  --glass-strong: rgb(20 12 44 / 0.7);
+  --glass-border: rgb(186 146 255 / 0.25);
+  --field-glow-a: rgb(169 139 255 / 0.82);
+  --field-glow-b: rgb(255 111 216 / 0.72);
+  --field-aura: rgb(169 139 255 / 0.12);
+  --overlay-inner: rgb(28 16 58 / 0.24);
+  --overlay-outer: rgb(6 3 16 / 0.74);
+  --vignette-edge: rgb(8 4 20 / 0.58);
+}
+
+body[data-bg="bell-field"] {
+  --bg: #030714;
+  --glass: rgb(14 24 54 / 0.48);
+  --glass-strong: rgb(10 18 44 / 0.68);
+  --glass-border: rgb(118 186 255 / 0.25);
+  --field-glow-a: rgb(104 184 255 / 0.82);
+  --field-glow-b: rgb(169 139 255 / 0.72);
+  --field-aura: rgb(104 184 255 / 0.11);
+  --overlay-inner: rgb(14 26 58 / 0.24);
+  --overlay-outer: rgb(2 6 18 / 0.74);
+  --vignette-edge: rgb(3 7 20 / 0.58);
+}
+
+body[data-bg="stream-convergence"] {
+  --bg: #090311;
+  --glass: rgb(32 14 42 / 0.48);
+  --glass-strong: rgb(24 10 34 / 0.7);
+  --glass-border: rgb(255 130 218 / 0.25);
+  --field-glow-a: rgb(255 111 216 / 0.8);
+  --field-glow-b: rgb(95 246 255 / 0.72);
+  --field-aura: rgb(255 111 216 / 0.11);
+  --overlay-inner: rgb(34 14 48 / 0.24);
+  --overlay-outer: rgb(8 2 14 / 0.74);
+  --vignette-edge: rgb(10 3 18 / 0.58);
 }
 
 *,
@@ -61,8 +134,8 @@ body[data-state="playing"] #game {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse at center, transparent 54%, rgb(0 0 0 / 0.58) 100%),
-    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.016) 0 1px, transparent 1px 3px);
+    radial-gradient(ellipse at center, transparent 52%, var(--vignette-edge) 100%),
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.015) 0 1px, transparent 1px 3px);
 }
 
 /* ───────── HUD ───────── */
@@ -374,12 +447,12 @@ body[data-state="playing"] #game {
   background: linear-gradient(90deg, var(--cyan), var(--emerald));
 }
 
-/* Interactive Sound Badge */
+/* Interactive Sound & Backdrop Field Badges */
 
-.sound-badge {
+.sound-badge,
+.bg-badge {
   appearance: none;
   position: fixed;
-  inset-inline-end: 16px;
   inset-block-end: 16px;
   padding: 7px 14px;
   border-radius: 999px;
@@ -393,16 +466,26 @@ body[data-state="playing"] #game {
   backdrop-filter: blur(10px);
   cursor: pointer;
   z-index: 15;
-  transition: color 0.25s ease, border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
+  transition: color 0.25s ease, border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease;
+}
+
+.sound-badge {
+  inset-inline-end: 16px;
+}
+
+.bg-badge {
+  inset-inline-start: 16px;
 }
 
 .sound-badge:hover,
-.sound-badge:focus-visible {
+.sound-badge:focus-visible,
+.bg-badge:hover,
+.bg-badge:focus-visible {
   outline: none;
   color: var(--text);
-  border-color: rgb(95 246 255 / 0.55);
-  background: rgb(20 30 66 / 0.72);
-  box-shadow: 0 0 18px rgb(95 246 255 / 0.24);
+  border-color: var(--field-glow-a);
+  background: var(--glass-strong);
+  box-shadow: 0 0 18px var(--field-aura);
 }
 
 .sound-badge.muted {
@@ -485,7 +568,7 @@ body[data-state="playing"] #game {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: radial-gradient(ellipse at center, rgb(12 16 44 / 0.28), rgb(2 3 11 / 0.72));
+  background: radial-gradient(ellipse at center, var(--overlay-inner), var(--overlay-outer));
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -508,27 +591,27 @@ body[data-state="playing"] #game {
   overflow: auto;
   scrollbar-width: thin;
   scrollbar-color: rgb(140 200 255 / 0.25) transparent;
-  padding: 34px 34px 26px;
+  padding: 32px 34px 24px;
   border-radius: 24px;
   text-align: center;
-  background: linear-gradient(165deg, rgb(18 26 62 / 0.76), var(--glass-strong));
+  background: linear-gradient(165deg, var(--glass), var(--glass-strong));
   border: 1px solid var(--glass-border);
   backdrop-filter: blur(18px) saturate(155%);
   box-shadow:
     0 32px 84px rgb(0 0 0 / 0.62),
-    inset 0 1px 0 rgb(255 255 255 / 0.12),
-    0 0 70px rgb(95 246 255 / 0.08);
+    inset 0 1px 0 var(--glass-highlight),
+    0 0 72px var(--field-aura);
   transform: translateY(20px) scale(0.96);
-  transition: transform 0.52s var(--ease-out);
+  transition: transform 0.52s var(--ease-out), border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .panel::before {
   content: "";
   position: absolute;
   inset-block-start: 0;
-  inset-inline: 18%;
+  inset-inline: 16%;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgb(95 246 255 / 0.75), rgb(255 111 216 / 0.65), transparent);
+  background: linear-gradient(90deg, transparent, var(--field-glow-a), var(--field-glow-b), transparent);
   pointer-events: none;
 }
 
@@ -952,7 +1035,13 @@ body.touch .sound-badge {
   inset-block-end: max(16px, calc(env(safe-area-inset-bottom) + 8px));
 }
 
-body.touch[data-state="playing"] .sound-badge {
+body.touch .bg-badge {
+  inset-inline-start: max(16px, calc(env(safe-area-inset-left) + 8px));
+  inset-block-end: max(16px, calc(env(safe-area-inset-bottom) + 8px));
+}
+
+body.touch[data-state="playing"] .sound-badge,
+body.touch[data-state="playing"] .bg-badge {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -1200,6 +1289,84 @@ body.touch[data-state="playing"] .touch-controls {
   }
 }
 
+/* ───────── PortalField Backdrop Selector ───────── */
+
+.field-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 10px;
+  margin: 0 0 16px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 0.032);
+  border: 1px solid rgb(255 255 255 / 0.08);
+}
+
+.field-picker.compact {
+  margin: 16px 0 0;
+}
+
+.field-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.field-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 5px;
+}
+
+.field-pill {
+  appearance: none;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: rgb(255 255 255 / 0.04);
+  border: 1px solid rgb(255 255 255 / 0.12);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.14s ease;
+}
+
+.field-pill:hover,
+.field-pill:focus-visible {
+  outline: none;
+  color: var(--text);
+  border-color: var(--field-glow-a);
+  background: rgb(255 255 255 / 0.09);
+}
+
+.field-pill.active {
+  color: var(--text);
+  background: linear-gradient(135deg, rgb(95 246 255 / 0.2), rgb(169 139 255 / 0.22));
+  border-color: var(--field-glow-a);
+  box-shadow: 0 0 14px var(--field-aura);
+}
+
+.field-pill:active {
+  transform: scale(0.95);
+}
+
+@media (max-width: 500px) {
+  .bg-badge {
+    font-size: 10px;
+    padding: 6px 10px;
+  }
+}
+
 /* Very short screens (phones in landscape): tighten menus so buttons stay in view */
 
 @media (max-height: 520px) {
@@ -1244,7 +1411,18 @@ body.touch[data-state="playing"] .touch-controls {
   }
 
   .intel {
-    margin-bottom: 10px;
+    margin-bottom: 8px;
+  }
+
+  .field-picker {
+    margin: 8px 0 10px;
+    padding: 6px 10px;
+    gap: 6px;
+  }
+
+  .field-pill {
+    padding: 4px 9px;
+    font-size: 10px;
   }
 
   .stats {

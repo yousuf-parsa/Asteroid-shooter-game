@@ -16,6 +16,7 @@ Shatter every asteroid to clear the wave. Big rocks split into medium rocks, whi
 | Phase dash | `Shift` / `S` / `↓` |
 | Pause | `P` / `Esc` |
 | Mute | `M` |
+| Switch background field | `B` |
 
 ### On a phone or tablet
 
@@ -37,6 +38,7 @@ On-screen controls appear automatically on touchscreens. Landscape works best.
 - **Volatile asteroids** (orange) take two hits and explode in a chain blast that damages everything nearby.
 - **Saucers.** Scouts appear from wave 2 and hunters from wave 4. Hunters aim ahead of you and always drop a power-up.
 - **Bonuses.** Wave clear bonus, extra flawless bonus for losing no lives, and an extra life every 12,000 points.
+- **Generative backgrounds.** Choose from 5 live reactive field backdrops — *Portal Field*, *Flow Field*, *Cloud Field*, *Bell Field*, and *Stream Convergence* — from the start/pause menu or with `B` (synchronized with the UI theme and saved locally).
 - **Sound.** All sound effects are generated live with the Web Audio API.
 - **High score** is saved in your browser.
 

@@ -8,7 +8,7 @@ Void Shatter is a purely client-side HTML5 Canvas and Web Audio API game with:
 - Zero runtime network requests (`connect-src 'none'`)
 - A strict Content Security Policy (`default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self' data:; base-uri 'none'; form-action 'none';`)
 - No dynamic code evaluation (`eval`, `new Function`) or HTML string injection (`innerHTML`, `document.write`)
-- Strictly validated `localStorage` usage limited to local high score and audio mute preference
+- Strictly validated `localStorage` usage limited to local high score, audio mute preference, and allowlisted background field selection
 
 ## Reporting a Vulnerability
 
