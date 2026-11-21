@@ -153,6 +153,10 @@
     novaRadius: 340,
     powerUpLife: 11.5,
     powerUpMagnet: 155,
+    // Screens shorter/narrower than this (phones) see a slightly zoomed-out field
+    // so the play area keeps desktop proportions. Larger screens are unaffected.
+    minViewSpan: 540,
+    touchPixelRatioCap: 1.5,
   });
 
   const TIERS = Object.freeze({
@@ -253,7 +257,8 @@
     /** Must be called from a user gesture; safe to call repeatedly. */
     init() {
       if (this.#ctx) {
-        if (this.#ctx.state === 'suspended' && !this.#muted && !document.hidden) {
+        // iOS can also report 'interrupted' (e.g. after a phone call)
+        if (this.#ctx.state !== 'running' && this.#ctx.state !== 'closed' && !this.#muted && !document.hidden) {
           this.#ctx.resume().catch(() => {});
         }
         return;
@@ -302,7 +307,7 @@
     }
 
     resumeIfActive() {
-      if (this.#ctx && this.#ctx.state === 'suspended' && !this.#muted && !document.hidden) {
+      if (this.#ctx && this.#ctx.state !== 'running' && this.#ctx.state !== 'closed' && !this.#muted && !document.hidden) {
         this.#ctx.resume().catch(() => {});
       }
     }
@@ -643,14 +648,178 @@
 
   class Input {
     down = new Set();
+    touch = { left: false, right: false, thrust: false, fire: false };
 
-    get left() { return this.down.has('ArrowLeft') || this.down.has('KeyA'); }
-    get right() { return this.down.has('ArrowRight') || this.down.has('KeyD'); }
-    get thrust() { return this.down.has('ArrowUp') || this.down.has('KeyW'); }
-    get fire() { return this.down.has('Space'); }
+    get left() { return this.down.has('ArrowLeft') || this.down.has('KeyA') || this.touch.left; }
+    get right() { return this.down.has('ArrowRight') || this.down.has('KeyD') || this.touch.right; }
+    get thrust() { return this.down.has('ArrowUp') || this.down.has('KeyW') || this.touch.thrust; }
+    get fire() { return this.down.has('Space') || this.touch.fire; }
 
     clear() {
       this.down.clear();
+      this.touch.left = false;
+      this.touch.right = false;
+      this.touch.thrust = false;
+      this.touch.fire = false;
+    }
+  }
+
+  // ───────────────────────── Touch Controls ─────────────────────────
+
+  // Fractions of the left pad: left third rotates left, right third rotates right,
+  // top part thrusts. Corners combine (e.g. top-left = thrust + rotate left).
+  const PAD_ZONE = Object.freeze({ left: 0.36, right: 0.64, up: 0.45 });
+  const RELEASE_EVENTS = Object.freeze(['pointerup', 'pointercancel', 'lostpointercapture']);
+
+  class TouchControls {
+    #game;
+    #touch;
+    #pad;
+    #keys;
+    #fire;
+    #dash;
+    #pause;
+    #padPointer = null;
+    #releaseFire = () => {};
+    #releaseDash = () => {};
+    #enabled = false;
+
+    constructor(game, input) {
+      this.#game = game;
+      this.#touch = input.touch;
+      this.#pad = byId('touch-pad');
+      this.#keys = {
+        left: byId('touch-left'),
+        right: byId('touch-right'),
+        thrust: byId('touch-up'),
+      };
+      this.#fire = byId('touch-fire');
+      this.#dash = byId('touch-dash');
+      this.#pause = byId('touch-pause');
+      this.#bind();
+      this.setEnabled(TouchControls.prefersTouch());
+    }
+
+    /** True on phones/tablets whose main input is a finger (not touchscreen laptops). */
+    static prefersTouch() {
+      if (typeof globalThis.matchMedia !== 'function') return false;
+      return globalThis.matchMedia('(pointer: coarse)').matches
+        && globalThis.matchMedia('(hover: none)').matches;
+    }
+
+    static #capture(el, pointerId) {
+      try {
+        el.setPointerCapture(pointerId);
+      } catch {
+        // Pointer already released before capture could be taken
+      }
+    }
+
+    setEnabled(on) {
+      if (on === this.#enabled) return;
+      this.#enabled = on;
+      document.body.classList.toggle('touch', on);
+      if (!on) this.releaseAll();
+    }
+
+    setDashReady(ready) {
+      this.#dash.classList.toggle('ready', ready);
+    }
+
+    releaseAll() {
+      this.#releasePad();
+      this.#releaseFire();
+      this.#releaseDash();
+    }
+
+    #bind() {
+      // Show touch controls after a finger touch; hide them again if a keyboard is used.
+      globalThis.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'touch') this.setEnabled(true);
+      }, { capture: true, passive: true });
+      globalThis.addEventListener('keydown', (e) => {
+        if (GAME_KEYS.has(e.code)) this.setEnabled(false);
+      }, { capture: true });
+      globalThis.addEventListener('blur', () => this.releaseAll());
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) this.releaseAll();
+      });
+
+      const pad = this.#pad;
+      pad.addEventListener('pointerdown', (e) => {
+        if (this.#padPointer !== null) return;
+        e.preventDefault();
+        this.#padPointer = e.pointerId;
+        TouchControls.#capture(pad, e.pointerId);
+        this.#updatePad(e);
+      });
+      pad.addEventListener('pointermove', (e) => {
+        if (e.pointerId === this.#padPointer) this.#updatePad(e);
+      });
+      const endPad = (e) => {
+        if (e.pointerId === this.#padPointer) this.#releasePad();
+      };
+      for (const type of RELEASE_EVENTS) pad.addEventListener(type, endPad);
+
+      this.#releaseFire = this.#bindHold(this.#fire, (down) => {
+        this.#touch.fire = down;
+      });
+      this.#releaseDash = this.#bindHold(this.#dash, (down) => {
+        if (down) this.#game.onKeyPress('ShiftLeft');
+      });
+
+      this.#pause.addEventListener('click', (e) => {
+        e.currentTarget?.blur?.();
+        this.#game.onKeyPress('KeyP');
+      });
+
+      byId('touch-controls').addEventListener('contextmenu', (e) => e.preventDefault());
+    }
+
+    #bindHold(el, onChange) {
+      let activeId = null;
+      const release = () => {
+        if (activeId === null) return;
+        activeId = null;
+        el.classList.remove('pressed');
+        onChange(false);
+      };
+      el.addEventListener('pointerdown', (e) => {
+        if (activeId !== null) return;
+        e.preventDefault();
+        activeId = e.pointerId;
+        TouchControls.#capture(el, e.pointerId);
+        el.classList.add('pressed');
+        onChange(true);
+      });
+      const end = (e) => {
+        if (e.pointerId === activeId) release();
+      };
+      for (const type of RELEASE_EVENTS) el.addEventListener(type, end);
+      return release;
+    }
+
+    #updatePad(e) {
+      const r = this.#pad.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return;
+      const x = (e.clientX - r.left) / r.width;
+      const y = (e.clientY - r.top) / r.height;
+      this.#setPad(x < PAD_ZONE.left, x > PAD_ZONE.right, y < PAD_ZONE.up);
+    }
+
+    #releasePad() {
+      this.#padPointer = null;
+      this.#setPad(false, false, false);
+    }
+
+    #setPad(left, right, thrust) {
+      const t = this.#touch;
+      t.left = left;
+      t.right = right;
+      t.thrust = thrust;
+      this.#keys.left.classList.toggle('active', left);
+      this.#keys.right.classList.toggle('active', right);
+      this.#keys.thrust.classList.toggle('active', thrust);
     }
   }
 
@@ -1150,6 +1319,8 @@
       };
 
       this.input = new Input();
+      this.touchControls = new TouchControls(this, this.input);
+      this.pixelRatioCap = TouchControls.prefersTouch() ? CFG.touchPixelRatioCap : 2;
       this.audio = new SoundEngine(Store.get(STORAGE_KEYS.mute, '0') === '1');
       this.stars = new Starfield();
       this.particles = new ParticleSystem(CFG.maxParticles);
@@ -1258,6 +1429,9 @@
       });
 
       globalThis.addEventListener('pointerdown', () => this.audio.init(), { passive: true });
+      // Mobile browsers (notably iOS Safari) only unlock audio on touch release
+      globalThis.addEventListener('pointerup', () => this.audio.init(), { passive: true });
+      globalThis.addEventListener('touchend', () => this.audio.init(), { passive: true });
 
       globalThis.addEventListener('blur', () => {
         this.input.clear();
@@ -1335,16 +1509,22 @@
     }
 
     resize(rebuildNebula) {
-      const w = Math.max(320, globalThis.innerWidth);
-      const h = Math.max(240, globalThis.innerHeight);
-      const dpr = clamp(globalThis.devicePixelRatio ?? 1, 1, 2);
+      const cssW = Math.max(320, globalThis.innerWidth);
+      const cssH = Math.max(240, globalThis.innerHeight);
+      const pixelRatio = clamp(globalThis.devicePixelRatio ?? 1, 1, this.pixelRatioCap);
+      // `viewScale` is 1 on desktop; below `minViewSpan` the world is zoomed out to fit.
+      const viewScale = Math.min(1, Math.min(cssW, cssH) / CFG.minViewSpan);
+      const w = Math.round(cssW / viewScale);
+      const h = Math.round(cssH / viewScale);
+      // `dpr` is the full render scale (device pixels per world unit), so glow sizes scale with it
+      const dpr = pixelRatio * viewScale;
       if (w === this.width && h === this.height && dpr === this.dpr && !rebuildNebula) return;
 
       this.width = w;
       this.height = h;
       this.dpr = dpr;
-      this.canvas.width = Math.round(w * dpr);
-      this.canvas.height = Math.round(h * dpr);
+      this.canvas.width = Math.round(cssW * pixelRatio);
+      this.canvas.height = Math.round(cssH * pixelRatio);
       this.stars.resize(w, h, rebuildNebula);
 
       const fit = (e) => {
@@ -1388,6 +1568,7 @@
       } else {
         this.audio.setThrust(false);
         this.audio.setSaucerHum(false, false);
+        this.touchControls.releaseAll();
       }
     }
 
@@ -2917,6 +3098,7 @@
       if (cache.dashReady !== ready) {
         cache.dashReady = ready;
         ui.dash.classList.toggle('ready', ready);
+        this.touchControls.setDashReady(ready);
       }
     }
 

@@ -880,3 +880,382 @@ kbd.wide {
     animation: none;
   }
 }
+
+/* ───────── Touch & mobile (only affects touchscreens and very short screens) ───────── */
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  touch-action: manipulation;
+  overscroll-behavior: none;
+}
+
+body {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#game {
+  touch-action: none;
+}
+
+.touch-only,
+.touch-controls,
+.touch-pause {
+  display: none;
+}
+
+body.touch .kbd-only {
+  display: none;
+}
+
+body.touch .controls.touch-only {
+  display: grid;
+}
+
+body.touch p.touch-only {
+  display: block;
+}
+
+body.touch .touch-controls {
+  display: block;
+}
+
+body.touch .touch-pause {
+  display: flex;
+}
+
+@media (orientation: landscape) {
+  body.touch .landscape-tip {
+    display: none;
+  }
+}
+
+/* Keep HUD, overlays and badges clear of notches and the home indicator */
+
+body.touch .hud {
+  inset-block-start: max(10px, env(safe-area-inset-top));
+  inset-inline-start: max(10px, env(safe-area-inset-left));
+  inset-inline-end: max(10px, env(safe-area-inset-right));
+}
+
+body.touch .overlay {
+  padding:
+    max(12px, env(safe-area-inset-top))
+    max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
+}
+
+body.touch .sound-badge {
+  inset-inline-end: max(16px, calc(env(safe-area-inset-right) + 8px));
+  inset-block-end: max(16px, calc(env(safe-area-inset-bottom) + 8px));
+}
+
+body.touch[data-state="playing"] .sound-badge {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Pause button (sits in the HUD on touchscreens) */
+
+.touch-pause {
+  appearance: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.touch-pause:active {
+  transform: scale(0.94);
+}
+
+.pause-icon {
+  position: relative;
+  width: 14px;
+  height: 16px;
+}
+
+.pause-icon::before,
+.pause-icon::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 4px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--cyan);
+  box-shadow: 0 0 8px rgb(95 246 255 / 0.6);
+}
+
+.pause-icon::before {
+  left: 1px;
+}
+
+.pause-icon::after {
+  right: 1px;
+}
+
+/* On-screen controls */
+
+.touch-controls {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0s linear 0.3s;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+body.touch[data-state="playing"] .touch-controls {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.3s ease, visibility 0s linear 0s;
+}
+
+.touch-pad {
+  position: absolute;
+  left: max(16px, calc(env(safe-area-inset-left) + 8px));
+  bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
+  width: 168px;
+  height: 132px;
+  border-radius: 30px;
+  background: radial-gradient(ellipse at 50% 60%, rgb(95 246 255 / 0.07), rgb(14 20 46 / 0.32));
+  border: 1px solid rgb(140 200 255 / 0.16);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.pad-key {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgb(14 20 46 / 0.55);
+  border: 1px solid rgb(140 200 255 / 0.28);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
+  pointer-events: none;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+}
+
+.pad-key::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+
+.pad-left {
+  left: 10px;
+  bottom: 14px;
+}
+
+.pad-left::before {
+  border-width: 9px 13px 9px 0;
+  border-color: transparent var(--cyan) transparent transparent;
+  margin-right: 3px;
+}
+
+.pad-right {
+  right: 10px;
+  bottom: 14px;
+}
+
+.pad-right::before {
+  border-width: 9px 0 9px 13px;
+  border-color: transparent transparent transparent var(--cyan);
+  margin-left: 3px;
+}
+
+.pad-up {
+  top: 10px;
+  left: calc(50% - 25px);
+}
+
+.pad-up::before {
+  border-width: 0 9px 13px;
+  border-color: transparent transparent var(--amber);
+  margin-bottom: 3px;
+}
+
+.pad-key.active {
+  background: rgb(95 246 255 / 0.22);
+  border-color: rgb(95 246 255 / 0.75);
+  box-shadow: 0 0 18px rgb(95 246 255 / 0.45);
+  transform: scale(0.95);
+}
+
+.pad-up.active {
+  background: rgb(255 156 71 / 0.22);
+  border-color: rgb(255 156 71 / 0.75);
+  box-shadow: 0 0 18px rgb(255 156 71 / 0.45);
+}
+
+.touch-actions {
+  position: absolute;
+  right: max(16px, calc(env(safe-area-inset-right) + 8px));
+  bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
+  width: 176px;
+  height: 150px;
+  pointer-events: none;
+}
+
+.touch-btn {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font: 700 12px var(--font-mono);
+  letter-spacing: 0.16em;
+  text-indent: 0.16em;
+  text-transform: uppercase;
+  color: var(--text);
+  background: rgb(14 20 46 / 0.5);
+  border: 1px solid rgb(140 200 255 / 0.3);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.08);
+  pointer-events: auto;
+  touch-action: none;
+  transition: background 0.12s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease, transform 0.12s ease;
+}
+
+.touch-btn.fire {
+  right: 0;
+  bottom: 0;
+  width: 92px;
+  height: 92px;
+  color: var(--gold);
+  border-color: rgb(255 215 106 / 0.5);
+  text-shadow: 0 0 10px rgb(255 215 106 / 0.6);
+}
+
+.touch-btn.fire.pressed {
+  background: rgb(255 215 106 / 0.2);
+  box-shadow: 0 0 26px rgb(255 215 106 / 0.45);
+  transform: scale(0.95);
+}
+
+.touch-btn.dash {
+  right: 104px;
+  bottom: 64px;
+  width: 66px;
+  height: 66px;
+  font-size: 10px;
+  color: #6f7fa1;
+}
+
+.touch-btn.dash.ready {
+  color: var(--cyan);
+  border-color: rgb(95 246 255 / 0.55);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.35), 0 0 16px rgb(95 246 255 / 0.25);
+}
+
+.touch-btn.dash.pressed {
+  background: rgb(95 246 255 / 0.2);
+  transform: scale(0.94);
+}
+
+@media (max-width: 420px) {
+  .touch-pad {
+    width: 144px;
+    height: 116px;
+  }
+
+  .pad-key {
+    width: 44px;
+    height: 44px;
+  }
+
+  .pad-up {
+    left: calc(50% - 22px);
+  }
+
+  .touch-actions {
+    width: 150px;
+    height: 132px;
+  }
+
+  .touch-btn.fire {
+    width: 80px;
+    height: 80px;
+  }
+
+  .touch-btn.dash {
+    right: 88px;
+    bottom: 56px;
+    width: 58px;
+    height: 58px;
+  }
+}
+
+/* Very short screens (phones in landscape): tighten menus so buttons stay in view */
+
+@media (max-height: 520px) {
+  .panel {
+    padding: 16px 22px 14px;
+  }
+
+  #screen-start .panel {
+    width: min(760px, 100%);
+  }
+
+  #screen-start .eyebrow {
+    display: none;
+  }
+
+  .eyebrow {
+    margin-bottom: 6px;
+  }
+
+  .title {
+    font-size: 34px;
+  }
+
+  #screen-start .controls {
+    grid-template-columns: repeat(3, auto);
+    justify-content: space-between;
+  }
+
+  .title.small {
+    font-size: 30px;
+  }
+
+  .tagline {
+    margin-top: 8px;
+  }
+
+  .controls {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 14px;
+    margin: 12px 0 10px;
+    padding: 10px 14px;
+  }
+
+  .intel {
+    margin-bottom: 10px;
+  }
+
+  .stats {
+    margin-top: 10px;
+  }
+
+  .btn-row {
+    margin-top: 12px;
+  }
+
+  .hint {
+    margin-top: 8px;
+  }
+}

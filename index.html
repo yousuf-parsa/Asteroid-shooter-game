@@ -3,7 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self' data:; base-uri 'none'; form-action 'none';">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Void Shatter">
   <meta name="referrer" content="no-referrer">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#02030b">
@@ -37,6 +41,7 @@
     </div>
 
     <div class="hud-cluster center">
+      <button id="touch-pause" class="chip touch-pause" type="button" aria-label="Pause game"><span class="pause-icon" aria-hidden="true"></span></button>
       <div class="chip wave-chip">
         <span class="chip-label">Wave</span>
         <output id="hud-wave" class="chip-value">1</output>
@@ -61,6 +66,19 @@
 
   <button id="sound-badge" class="sound-badge" type="button" aria-pressed="false" aria-label="Toggle sound">Sound on · M</button>
 
+  <!-- Touch controls: only shown on touchscreens while playing -->
+  <div id="touch-controls" class="touch-controls" aria-hidden="true">
+    <div id="touch-pad" class="touch-pad">
+      <span id="touch-left" class="pad-key pad-left"></span>
+      <span id="touch-up" class="pad-key pad-up"></span>
+      <span id="touch-right" class="pad-key pad-right"></span>
+    </div>
+    <div class="touch-actions">
+      <div id="touch-dash" class="touch-btn dash ready">Dash</div>
+      <div id="touch-fire" class="touch-btn fire">Fire</div>
+    </div>
+  </div>
+
   <div id="banner" class="banner" aria-live="polite">
     <div id="banner-title" class="banner-title"></div>
     <div id="banner-sub" class="banner-sub"></div>
@@ -75,7 +93,16 @@
       <h1 id="start-title" class="title">VOID<span class="accent">SHATTER</span></h1>
       <p class="tagline">Shatter the belt. Intercept rogue saucers. Chain the void.</p>
 
-      <ul class="controls">
+      <ul class="controls touch-only" aria-label="Touch controls">
+        <li><span class="keys"><kbd>←</kbd><kbd>→</kbd></span>Rotate (left pad)</li>
+        <li><span class="keys"><kbd>↑</kbd></span>Thrust (left pad)</li>
+        <li><span class="keys"><kbd class="wide">Fire</kbd></span>Hold to fire</li>
+        <li><span class="keys"><kbd class="wide">Dash</kbd></span>Phase dash</li>
+        <li><span class="keys"><kbd>II</kbd></span>Pause</li>
+        <li><span class="keys"><kbd>↑</kbd><kbd>←</kbd></span>Slide to turn + thrust</li>
+      </ul>
+
+      <ul class="controls kbd-only">
         <li><span class="keys"><kbd>W</kbd><kbd>↑</kbd></span>Thrust</li>
         <li><span class="keys"><kbd>A</kbd><kbd>D</kbd><kbd>←</kbd><kbd>→</kbd></span>Rotate</li>
         <li><span class="keys"><kbd class="wide">Space</kbd></span>Fire plasma</li>
@@ -94,7 +121,8 @@
       <div class="btn-row">
         <button id="btn-start" class="btn primary" type="button">Launch</button>
       </div>
-      <p class="hint">or press <kbd>Enter</kbd> / <kbd class="wide">Space</kbd></p>
+      <p class="hint kbd-only">or press <kbd>Enter</kbd> / <kbd class="wide">Space</kbd></p>
+      <p class="hint touch-only landscape-tip">Best played in landscape</p>
     </div>
   </section>
 
@@ -116,7 +144,7 @@
         <button id="btn-sound" class="btn ghost" type="button">Sound: On</button>
         <button id="btn-pause-menu" class="btn ghost" type="button">Main menu</button>
       </div>
-      <p class="hint"><kbd>P</kbd> / <kbd>Esc</kbd> resume · <kbd>R</kbd> restart · <kbd>M</kbd> mute</p>
+      <p class="hint kbd-only"><kbd>P</kbd> / <kbd>Esc</kbd> resume · <kbd>R</kbd> restart · <kbd>M</kbd> mute</p>
     </div>
   </section>
 
@@ -140,7 +168,7 @@
         <button id="btn-again" class="btn primary" type="button">Play again</button>
         <button id="btn-over-menu" class="btn ghost" type="button">Main menu</button>
       </div>
-      <p class="hint">press <kbd>Enter</kbd> to fly again · <kbd>Esc</kbd> menu</p>
+      <p class="hint kbd-only">press <kbd>Enter</kbd> to fly again · <kbd>Esc</kbd> menu</p>
     </div>
   </section>
 </body>

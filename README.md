@@ -17,7 +17,17 @@ Shatter every asteroid to clear the wave. Big rocks split into medium rocks, whi
 | Pause | `P` / `Esc` |
 | Mute | `M` |
 
-A keyboard is required. There are no touch controls.
+### On a phone or tablet
+
+On-screen controls appear automatically on touchscreens. Landscape works best.
+
+| Action | Touch |
+| --- | --- |
+| Rotate | Left pad ◀ ▶ |
+| Thrust | Left pad ▲ (slide to a top corner to turn and thrust together) |
+| Fire | Hold **Fire** |
+| Phase dash | Tap **Dash** |
+| Pause | **II** button at the top |
 
 ## Features
 
