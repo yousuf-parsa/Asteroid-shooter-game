@@ -213,8 +213,31 @@
   const SHIP_GLOW = '#00d9ff';
   const FLAME_COLORS = Object.freeze(['#ffb347', '#ff7a3d', '#ff3d9a', '#ffe08a']);
 
-  // Sleek vector starfighter geometry (nose right at angle 0)
-  const HULL = Object.freeze([18, 0, 5, 5, -11, 11, -7, 3, -10, 0, -7, -3, -11, -11, 5, -5]);
+  // Advanced interceptor geometry (local space, nose toward +x at angle 0).
+  // Long nose, swept wings and twin engine pods. Shared by the renderer, dash
+  // afterimages and hull debris so every effect matches the silhouette.
+  const HULL = Object.freeze([
+    20, 0, 13, -2.3, 6.5, -3.4, 3, -4.7, -4.5, -10.5, -8.5, -11, -7.5, -7,
+    -9.5, -5.4, -11.5, -5.1, -11.5, -1.9, -8.5, -1.3, -7.5, 0,
+    -8.5, 1.3, -11.5, 1.9, -11.5, 5.1, -9.5, 5.4, -7.5, 7, -8.5, 11,
+    -4.5, 10.5, 3, 4.7, 6.5, 3.4, 13, 2.3,
+  ]);
+
+  // Hardpoints on the hull, used to line up muzzles, exhaust and thruster puffs.
+  const SHIP_GEO = Object.freeze({
+    noseX: 20, // main cannon muzzle
+    cannonX: 5.5, // wing cannon muzzles (spread shot side bolts)
+    cannonY: 7.2,
+    nozzleX: -11.5, // twin engine exits
+    nozzleY: 3.5,
+    rcsX: 11, // nose attitude thrusters
+    rcsY: 2.6,
+    wingtipX: -7.6, // navigation lights
+    wingtipY: 10.6,
+  });
+
+  const NAV_PORT = '#ff3b5c';
+  const NAV_STARBOARD = '#3bff8f';
 
   const traceHull = (ctx) => {
     ctx.moveTo(HULL[0], HULL[1]);
@@ -1648,6 +1671,7 @@
     dashInvuln = 0;
     ghostTimer = 0;
     trailAcc = 0;
+    trailSide = 1;
     rcsAcc = 0;
     shield = false;
     weapon = 'normal';
@@ -1675,6 +1699,7 @@
       this.dashInvuln = 0;
       this.ghostTimer = 0;
       this.trailAcc = 0;
+      this.trailSide = 1;
       this.rcsAcc = 0;
       this.shield = false;
       this.weapon = 'normal';
@@ -2468,13 +2493,14 @@
       const isSpread = s.weapon === 'spread';
       const isRapid = s.weapon === 'rapid';
       const speed = c.bulletSpeed;
+      // Main bolt leaves the nose; Spread Shot side bolts leave the wing cannons
       const emitters = isSpread
         ? [
-          { spread: -0.16, forward: 13, lateral: -8 },
-          { spread: 0, forward: 19, lateral: 0 },
-          { spread: 0.16, forward: 13, lateral: 8 },
+          { spread: -0.16, forward: SHIP_GEO.cannonX, lateral: -SHIP_GEO.cannonY },
+          { spread: 0, forward: SHIP_GEO.noseX, lateral: 0 },
+          { spread: 0.16, forward: SHIP_GEO.cannonX, lateral: SHIP_GEO.cannonY },
         ]
-        : [{ spread: 0, forward: 19, lateral: 0 }];
+        : [{ spread: 0, forward: SHIP_GEO.noseX, lateral: 0 }];
 
       // Atomic volley check so Spread Shot never fires uneven partial volleys
       if (this.bullets.length + emitters.length > c.maxBullets) return;
@@ -2486,12 +2512,11 @@
       const sin = Math.sin(s.angle);
       const perpX = -sin;
       const perpY = cos;
-      const rawMx = s.x + cos * 19;
-      const rawMy = s.y + sin * 19;
+      const rawMx = s.x + cos * SHIP_GEO.noseX;
+      const rawMy = s.y + sin * SHIP_GEO.noseX;
       const wrapOx = rawMx < 0 ? this.width : rawMx >= this.width ? -this.width : 0;
       const wrapOy = rawMy < 0 ? this.height : rawMy >= this.height ? -this.height : 0;
-      const mx = rawMx + wrapOx;
-      const my = rawMy + wrapOy;
+      const sparksPerMuzzle = isSpread ? 2 : 3;
 
       for (const em of emitters) {
         const a = s.angle + em.spread;
@@ -2499,6 +2524,24 @@
         const bSin = Math.sin(a);
         const bx = s.x + cos * em.forward + perpX * em.lateral + wrapOx;
         const by = s.y + sin * em.forward + perpY * em.lateral + wrapOy;
+
+        // Muzzle flash sparks at each firing cannon
+        for (let i = 0; i < sparksPerMuzzle; i++) {
+          const sa = a + rand(-0.55, 0.55);
+          const sp = rand(95, 240);
+          this.particles.spawn(
+            P_SPARK,
+            bx,
+            by,
+            s.vx * 0.5 + Math.cos(sa) * sp,
+            s.vy * 0.5 + Math.sin(sa) * sp,
+            rand(0.08, 0.16),
+            1.45,
+            color,
+            0.05,
+          );
+        }
+
         this.bullets.push({
           x: bx,
           y: by,
@@ -2519,22 +2562,6 @@
       s.fireTimer = isRapid ? c.rapidCooldown : c.fireCooldown;
       s.vx -= cos * (isSpread ? 11 : 6);
       s.vy -= sin * (isSpread ? 11 : 6);
-
-      for (let i = 0; i < (isSpread ? 6 : 3); i++) {
-        const a = s.angle + rand(-0.55, 0.55);
-        const sp = rand(95, 240);
-        this.particles.spawn(
-          P_SPARK,
-          mx,
-          my,
-          s.vx * 0.5 + Math.cos(a) * sp,
-          s.vy * 0.5 + Math.sin(a) * sp,
-          rand(0.08, 0.16),
-          1.45,
-          color,
-          0.05,
-        );
-      }
 
       if (playAudio) this.audio.laser(s.weapon);
     }
@@ -3225,18 +3252,21 @@
 
     emitThrust(s, cos, sin, dt) {
       s.trailAcc += dt * CFG.ship.trailRate;
-      const bx = s.x - cos * 9;
-      const by = s.y - sin * 9;
       while (s.trailAcc >= 1) {
         s.trailAcc -= 1;
-        const spread = rand(-0.34, 0.34);
+        // Alternate between the twin engine nozzles
+        s.trailSide = -s.trailSide;
+        const lat = SHIP_GEO.nozzleY * s.trailSide;
+        const bx = s.x + cos * SHIP_GEO.nozzleX - sin * lat;
+        const by = s.y + sin * SHIP_GEO.nozzleX + cos * lat;
+        const spread = rand(-0.26, 0.26);
         const back = rand(95, 185);
         const ex = Math.cos(s.angle + Math.PI + spread);
         const ey = Math.sin(s.angle + Math.PI + spread);
         this.particles.spawn(
           P_DOT,
-          bx + rand(-2, 2),
-          by + rand(-2, 2),
+          bx + rand(-1, 1),
+          by + rand(-1, 1),
           s.vx * 0.7 + ex * back,
           s.vy * 0.7 + ey * back,
           rand(0.2, 0.46),
@@ -3253,8 +3283,8 @@
         s.rcsAcc -= 1;
         // Side thruster puff on nose opposite turn direction
         const side = -turn;
-        const nx = s.x + cos * 9 - sin * (side * 4);
-        const ny = s.y + sin * 9 + cos * (side * 4);
+        const nx = s.x + cos * SHIP_GEO.rcsX - sin * (side * SHIP_GEO.rcsY);
+        const ny = s.y + sin * SHIP_GEO.rcsX + cos * (side * SHIP_GEO.rcsY);
         const px = -sin * side * rand(50, 95);
         const py = cos * side * rand(50, 95);
         this.particles.spawn(P_DOT, nx, ny, s.vx * 0.6 + px, s.vy * 0.6 + py, 0.14, 1.3, '#aef9ff', 0.15);
@@ -4052,11 +4082,47 @@
       const dpr = this.dpr;
       const blinkOff = s.invuln > 0 && Math.floor(s.invuln * 10) % 2 === 1;
 
-      // Deterministic flame length tied to `this.time` so pausing freezes the flame cleanly
+      // Deterministic flicker tied to `this.time` so pausing freezes the flames cleanly
       const flameLen = 13 + 5.5 * Math.sin(this.time * 68) + 3.5 * Math.cos(this.time * 119);
       const weaponAccent = s.weapon === 'spread' ? '#ffd76a' : s.weapon === 'rapid' ? '#4dffb8' : SHIP_COLOR;
+      const G = SHIP_GEO;
+      const dashing = s.dashBoost > 0;
+      const burning = s.thrusting || dashing;
+      const plumeLen = dashing ? flameLen * 1.45 : flameLen;
+      // Wingtip navigation lights: steady glow plus a short strobe every 1.2 s
+      const strobe = (this.time % 1.2) < 0.1;
 
-      forEachWrapped(s.x, s.y, 34, w, h, (ox, oy) => {
+      // Gradients are in the ship's local space, so build them once and reuse for each wrap copy
+      const hullGrad = ctx.createLinearGradient(G.nozzleX, 0, G.noseX, 0);
+      hullGrad.addColorStop(0, 'rgba(5, 16, 32, 0.95)');
+      hullGrad.addColorStop(0.55, 'rgba(10, 32, 56, 0.95)');
+      hullGrad.addColorStop(1, 'rgba(20, 60, 88, 0.95)');
+
+      const canopyGrad = ctx.createLinearGradient(12, -2, 0, 2);
+      canopyGrad.addColorStop(0, '#effeff');
+      canopyGrad.addColorStop(0.45, '#69dcff');
+      canopyGrad.addColorStop(1, '#1d3c8f');
+
+      let plumeGrad = null;
+      let coreGrad = null;
+      if (burning) {
+        plumeGrad = ctx.createLinearGradient(G.nozzleX, 0, G.nozzleX - plumeLen, 0);
+        if (dashing) {
+          // Phase dash burns blue-white
+          plumeGrad.addColorStop(0, 'rgba(210, 250, 255, 0.95)');
+          plumeGrad.addColorStop(0.35, 'rgba(95, 200, 255, 0.75)');
+          plumeGrad.addColorStop(1, 'rgba(140, 115, 255, 0)');
+        } else {
+          plumeGrad.addColorStop(0, 'rgba(255, 220, 150, 0.95)');
+          plumeGrad.addColorStop(0.35, 'rgba(255, 122, 61, 0.78)');
+          plumeGrad.addColorStop(1, 'rgba(255, 61, 154, 0)');
+        }
+        coreGrad = ctx.createLinearGradient(G.nozzleX, 0, G.nozzleX - plumeLen * 0.55, 0);
+        coreGrad.addColorStop(0, 'rgba(255, 255, 245, 1)');
+        coreGrad.addColorStop(1, 'rgba(255, 255, 245, 0)');
+      }
+
+      forEachWrapped(s.x, s.y, 46, w, h, (ox, oy) => {
         ctx.save();
         ctx.translate(s.x + ox, s.y + oy);
 
@@ -4095,63 +4161,148 @@
         }
 
         ctx.rotate(s.angle);
-        ctx.globalAlpha = blinkOff ? 0.24 : 1;
+        const baseAlpha = blinkOff ? 0.24 : 1;
+        ctx.globalAlpha = baseAlpha;
 
-        // Twin-core plasma thruster plume
-        if (s.thrusting) {
-          ctx.shadowColor = '#ff3d7f';
-          ctx.shadowBlur = 15 * dpr;
-          ctx.strokeStyle = '#ff8a3d';
-          ctx.lineWidth = 2.1;
+        // Twin plasma engine plumes (drawn first so they sit behind the hull)
+        if (burning) {
+          const nx = G.nozzleX;
           ctx.beginPath();
-          ctx.moveTo(-8, -4.8);
-          ctx.lineTo(-9 - flameLen, 0);
-          ctx.lineTo(-8, 4.8);
-          ctx.stroke();
+          for (let side = -1; side <= 1; side += 2) {
+            const ny = G.nozzleY * side;
+            const len = plumeLen * (1 + 0.06 * side * Math.sin(this.time * 97));
+            ctx.moveTo(nx, ny - 1.7);
+            ctx.quadraticCurveTo(nx - len * 0.4, ny - 2.5, nx - len, ny);
+            ctx.quadraticCurveTo(nx - len * 0.4, ny + 2.5, nx, ny + 1.7);
+            ctx.closePath();
+          }
+          ctx.fillStyle = plumeGrad;
+          ctx.shadowColor = dashing ? '#5fc8ff' : '#ff3d7f';
+          ctx.shadowBlur = 14 * dpr;
+          ctx.fill();
 
-          ctx.strokeStyle = '#fff0b3';
-          ctx.lineWidth = 1.4;
+          ctx.shadowBlur = 0;
           ctx.beginPath();
-          ctx.moveTo(-8, -2.3);
-          ctx.lineTo(-9 - flameLen * 0.56, 0);
-          ctx.lineTo(-8, 2.3);
-          ctx.stroke();
+          for (let side = -1; side <= 1; side += 2) {
+            const ny = G.nozzleY * side;
+            const len = plumeLen * 0.55;
+            ctx.moveTo(nx, ny - 0.8);
+            ctx.quadraticCurveTo(nx - len * 0.5, ny - 1, nx - len, ny);
+            ctx.quadraticCurveTo(nx - len * 0.5, ny + 1, nx, ny + 0.8);
+            ctx.closePath();
+          }
+          ctx.fillStyle = coreGrad;
+          ctx.fill();
         }
 
-        // Main starfighter hull
+        // Main hull: graded armour fill with a neon edge glow
         ctx.beginPath();
         traceHull(ctx);
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = 'rgba(4, 18, 32, 0.92)';
+        ctx.fillStyle = hullGrad;
         ctx.fill();
 
         ctx.shadowColor = s.weapon !== 'normal' ? weaponAccent : SHIP_GLOW;
-        ctx.shadowBlur = 16 * dpr;
+        ctx.shadowBlur = 15 * dpr;
         ctx.strokeStyle = s.dashInvuln > 0 ? '#e5dcff' : weaponAccent;
-        ctx.lineWidth = 2.05;
+        ctx.lineWidth = 1.9;
         ctx.stroke();
-
-        // Inner wing detail lines
         ctx.shadowBlur = 0;
-        ctx.globalAlpha *= 0.55;
-        ctx.lineWidth = 1;
+
+        // Panel lines: spine, wing roots and wing panels
+        ctx.globalAlpha = baseAlpha * 0.42;
+        ctx.strokeStyle = '#8fe6ff';
+        ctx.lineWidth = 0.8;
         ctx.beginPath();
-        ctx.moveTo(4, 4.2);
-        ctx.lineTo(-6, 7.6);
-        ctx.moveTo(4, -4.2);
-        ctx.lineTo(-6, -7.6);
+        ctx.moveTo(-1.5, 0);
+        ctx.lineTo(-7, 0);
+        for (let side = -1; side <= 1; side += 2) {
+          ctx.moveTo(4.5, 3.6 * side);
+          ctx.lineTo(-9.5, 4.3 * side);
+          ctx.moveTo(-1, 5.8 * side);
+          ctx.lineTo(-6.6, 9.8 * side);
+        }
         ctx.stroke();
 
-        // Cockpit canopy
-        ctx.globalAlpha = blinkOff ? 0.2 : 0.85;
-        ctx.fillStyle = '#d4feff';
+        // Twin wing cannons (Spread Shot side bolts fire from their tips)
+        ctx.globalAlpha = baseAlpha;
+        ctx.strokeStyle = '#bfefff';
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(10, 0);
-        ctx.lineTo(0, -3);
-        ctx.lineTo(-2, 0);
-        ctx.lineTo(0, 3);
+        for (let side = -1; side <= 1; side += 2) {
+          ctx.moveTo(-5.5, G.cannonY * side);
+          ctx.lineTo(G.cannonX, G.cannonY * side);
+        }
+        ctx.stroke();
+
+        // Weapon-coloured wing stripes
+        ctx.strokeStyle = weaponAccent;
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        for (let side = -1; side <= 1; side += 2) {
+          ctx.moveTo(-3.9, 9.4 * side);
+          ctx.lineTo(-7.6, 9.4 * side);
+        }
+        ctx.stroke();
+
+        // Glass cockpit canopy with a highlight glint
+        ctx.globalAlpha = baseAlpha * 0.95;
+        ctx.beginPath();
+        ctx.moveTo(12.5, 0);
+        ctx.quadraticCurveTo(8.5, -2.5, 2, -2);
+        ctx.quadraticCurveTo(-0.5, -1.2, -0.5, 0);
+        ctx.quadraticCurveTo(-0.5, 1.2, 2, 2);
+        ctx.quadraticCurveTo(8.5, 2.5, 12.5, 0);
         ctx.closePath();
+        ctx.fillStyle = canopyGrad;
         ctx.fill();
+        ctx.strokeStyle = 'rgba(200, 250, 255, 0.55)';
+        ctx.lineWidth = 0.6;
+        ctx.stroke();
+
+        ctx.globalAlpha = baseAlpha * 0.85;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(10.5, -0.9);
+        ctx.quadraticCurveTo(7.5, -1.7, 4, -1.4);
+        ctx.stroke();
+
+        // Engine nozzle cores: dim pilot glow when idle, white-hot under thrust
+        const coreR = burning ? 1.6 : 1.2;
+        ctx.globalAlpha = baseAlpha * (burning ? 1 : 0.55);
+        ctx.fillStyle = burning ? (dashing ? '#dff8ff' : '#fff1c4') : '#ff9c47';
+        ctx.shadowColor = dashing ? '#5fc8ff' : '#ff7a3d';
+        ctx.shadowBlur = (burning ? 10 : 5) * dpr;
+        ctx.beginPath();
+        for (let side = -1; side <= 1; side += 2) {
+          ctx.moveTo(G.nozzleX + coreR, G.nozzleY * side);
+          ctx.arc(G.nozzleX, G.nozzleY * side, coreR, 0, TAU);
+        }
+        ctx.fill();
+
+        // Wing cannon muzzle tips
+        ctx.globalAlpha = baseAlpha;
+        ctx.fillStyle = weaponAccent;
+        ctx.shadowColor = weaponAccent;
+        ctx.shadowBlur = 6 * dpr;
+        ctx.beginPath();
+        for (let side = -1; side <= 1; side += 2) {
+          ctx.moveTo(G.cannonX + 1, G.cannonY * side);
+          ctx.arc(G.cannonX, G.cannonY * side, 1, 0, TAU);
+        }
+        ctx.fill();
+
+        // Navigation lights: red on the port wing, green on the starboard wing
+        for (let side = -1; side <= 1; side += 2) {
+          const navColor = side < 0 ? NAV_PORT : NAV_STARBOARD;
+          ctx.fillStyle = navColor;
+          ctx.shadowColor = navColor;
+          ctx.shadowBlur = (strobe ? 10 : 4) * dpr;
+          ctx.globalAlpha = baseAlpha * (strobe ? 1 : 0.55);
+          ctx.beginPath();
+          ctx.arc(G.wingtipX, G.wingtipY * side, strobe ? 1.7 : 1.1, 0, TAU);
+          ctx.fill();
+        }
 
         ctx.restore();
       });
